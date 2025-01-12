@@ -9,6 +9,7 @@
 #include <linux/cpufreq.h>  // cpu frequency
 
 #include "info.h"
+#include "cache.h"
 
 static const char *PROCFS_FILENAME = "listik";
 static struct proc_dir_entry *procfs_file;
@@ -128,6 +129,118 @@ static void listik_seq_show_virtualization_section(struct seq_file *file) {
     }
 }
 
+static void _listik_seq_show_caches_section(
+    struct seq_file *file,
+    struct cpuinfo_x86 *cpu_information,
+    unsigned int op
+) {
+    u64 l1d_size = 0;
+    u16 l1d_instances = 0;
+    u64 l1i_size = 0;
+    u16 l1i_instances = 0;
+    u64 l2_size = 0;
+    u16 l2_instances = 0;
+    u64 l3_size = 0;
+    u16 l3_instances = 0;
+
+    u16 cntr;
+
+    u8 cache_level;
+    u8 cache_type;
+    unsigned int eax, ebx, ecx, edx;
+
+    // TODO: calculate cache instances???
+    cntr = 0;
+    while (true) {
+        eax = op;
+        ecx = cntr;
+
+        pr_info("eax=%x ebx=%x ecx=%x edx=%x\n", eax, ebx, ecx, edx);
+        __cpuid(&eax, &ebx, &ecx, &edx);
+        pr_info("eax=%x ebx=%x ecx=%x edx=%x\n", eax, ebx, ecx, edx);
+
+        cache_type = eax & 0b11111;
+        if (cache_type == 0) {
+            break;
+        }
+        cache_level = (eax >> 5) & 3;
+
+        pr_info("type=%d level=%d\n", cache_type, cache_level);
+        switch (cache_level) {
+            case 1: {
+                switch (cache_type) {
+                    case 1: {
+                        l1d_size = get_cache_size(ebx, ecx);
+                        break;
+                    }
+                    case 2: {
+                        l1i_size = get_cache_size(ebx, ecx);
+                        break;
+                    }
+                }
+                break;
+            }
+            case 2: {
+                switch (cache_type) {
+                    case 3: {
+                        l2_size = get_cache_size(ebx, ecx);
+                        break;
+                    }
+                }
+                break;
+            }
+            case 3: {
+                switch (cache_type) {
+                    case 3: {
+                        l3_size = get_cache_size(ebx, ecx);
+                        break;
+                    }
+                }
+                break;
+            }
+        }
+        cntr++;
+    }
+
+    seq_printf(
+        file,
+        "l1d_size=%llu\n"
+        "l1d_instances=%hu\n"
+        "l1i_size=%llu\n"
+        "l1i_instances=%hu\n"
+        "l2_size=%llu\n"
+        "l2_instances=%hu\n"
+        "l3_size=%llu\n"
+        "l3_instances=%hu\n",
+        l1d_size,
+        l1d_instances,
+        l1i_size,
+        l1i_instances,
+        l2_size,
+        l2_instances,
+        l3_size,
+        l3_instances
+    );
+}
+
+// https://en.wikipedia.org/wiki/CPUID#EAX=4_and_EAX=8000'001Dh:_Cache_Hierarchy_and_Topology
+static void listik_seq_show_caches_section(
+    struct seq_file *file,
+    struct cpuinfo_x86 *cpu_information
+) {
+    unsigned int op;
+    if (strcmp(cpu_information->x86_vendor_id, "GenuineIntel") == 0) {
+        op = 0x4;
+    } else if (strcmp(cpu_information->x86_vendor_id, "AuthenticAMD") == 0) {
+        op = 0x8000001D;
+    } else {
+        pr_info("Failed to retrieve info about caches (unsupported vendor), ignoring\n");
+        return;
+    }
+
+    _listik_seq_show_caches_section(file, cpu_information, op);    
+}
+
 static int listik_seq_show(struct seq_file *file, void *v) {
     unsigned long current_frequency;
     unsigned int cpu;
@@ -138,7 +251,7 @@ static int listik_seq_show(struct seq_file *file, void *v) {
 
     cpu_frequency_policy = cpufreq_cpu_get(cpu);
     if (cpu_frequency_policy == NULL) {
-        pr_info("Failed to get cpufreq policy, ignoring...\n");
+        pr_info("Failed to get cpufreq policy, ignoring\n");
     }
     current_frequency = cpufreq_get(cpu);
 
@@ -167,6 +280,7 @@ static int listik_seq_show(struct seq_file *file, void *v) {
     listik_seq_show_virtualization_section(file);
 
     // TODO: Caches
+    listik_seq_show_caches_section(file, cpu_information);
 
     // TODO: NUMA
 

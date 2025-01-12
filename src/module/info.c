@@ -1,3 +1,5 @@
+#include "info.h"
+
 #include <linux/module.h> 
 
 const char *get_endianness(void) {
