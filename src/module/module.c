@@ -1,17 +1,17 @@
+#include <asm/cpufeature.h> // x86_cap_flags
+#include <asm/processor.h>  // cpu_data(), struct cpuinfo_x86
+#include <linux/cpufreq.h>  // cpu frequency
 #include <linux/module.h>   // for modules
 #include <linux/printk.h>   // pr_*
 #include <linux/proc_fs.h>  // procfs
 #include <linux/seq_file.h> // seqfile
 #include <linux/smp.h>      // get_cpu(), put_cpu()
-#include <asm/processor.h>  // cpu_data(), struct cpuinfo_x86
-#include <asm/cpufeature.h> // x86_cap_flags
 #include <linux/utsname.h>  // utsname()
-#include <linux/cpufreq.h>  // cpu frequency
 
-#include "info.h"
 #include "cache.h"
+#include "info.h"
 
-static const char *PROCFS_FILENAME = "listik";
+static const char            *PROCFS_FILENAME = "listik";
 static struct proc_dir_entry *procfs_file;
 
 static void *listik_seq_start(struct seq_file *s, loff_t *pos) {
@@ -23,15 +23,14 @@ static void *listik_seq_start(struct seq_file *s, loff_t *pos) {
 
 static void *listik_seq_next(struct seq_file *s, void *v, loff_t *pos) {
     (*pos)++;
-    return NULL; 
+    return NULL;
 }
 
 static void listik_seq_stop(struct seq_file *s, void *v) {
-
 }
 
 static void listik_seq_show_architecture_section(
-    struct seq_file *file,
+    struct seq_file    *file,
     struct cpuinfo_x86 *cpu_information
 ) {
     struct new_utsname *uts = utsname();
@@ -68,10 +67,10 @@ static void listik_seq_show_cpu_section(struct seq_file *file) {
 }
 
 static void listik_seq_show_cpu_info_section(
-    struct seq_file *file,
-    struct cpuinfo_x86 *cpu_information,
+    struct seq_file       *file,
+    struct cpuinfo_x86    *cpu_information,
     struct cpufreq_policy *cpu_frequency_policy,
-    unsigned long current_frequency
+    unsigned long          current_frequency
 ) {
     size_t i;
 
@@ -88,7 +87,6 @@ static void listik_seq_show_cpu_info_section(
         cpu_information->x86_model_id,
         cpu_information->x86_stepping
     );
-
 
     if (cpu_frequency_policy != NULL) {
         unsigned int max_frequency = cpu_frequency_policy->max;
@@ -109,7 +107,7 @@ static void listik_seq_show_cpu_info_section(
     seq_printf(
         file,
         "bogomips=%lu.%02lu\n",
-        cpu_information->loops_per_jiffy / (500000 / HZ), (cpu_information->loops_per_jiffy/ (5000 / HZ)) % 100
+        cpu_information->loops_per_jiffy / (500000 / HZ), (cpu_information->loops_per_jiffy / (5000 / HZ)) % 100
     );
 
     seq_puts(file, "flags=");
@@ -130,9 +128,9 @@ static void listik_seq_show_virtualization_section(struct seq_file *file) {
 }
 
 static void _listik_seq_show_caches_section(
-    struct seq_file *file,
+    struct seq_file    *file,
     struct cpuinfo_x86 *cpu_information,
-    unsigned int op
+    unsigned int        op
 ) {
     u64 l1d_size = 0;
     u16 l1d_instances = 0;
@@ -145,8 +143,8 @@ static void _listik_seq_show_caches_section(
 
     u16 cntr;
 
-    u8 cache_level;
-    u8 cache_type;
+    u8           cache_level;
+    u8           cache_type;
     unsigned int eax, ebx, ecx, edx;
 
     // TODO: calculate cache instances???
@@ -225,7 +223,7 @@ static void _listik_seq_show_caches_section(
 
 // https://en.wikipedia.org/wiki/CPUID#EAX=4_and_EAX=8000'001Dh:_Cache_Hierarchy_and_Topology
 static void listik_seq_show_caches_section(
-    struct seq_file *file,
+    struct seq_file    *file,
     struct cpuinfo_x86 *cpu_information
 ) {
     unsigned int op;
@@ -238,15 +236,15 @@ static void listik_seq_show_caches_section(
         return;
     }
 
-    _listik_seq_show_caches_section(file, cpu_information, op);    
+    _listik_seq_show_caches_section(file, cpu_information, op);
 }
 
 static int listik_seq_show(struct seq_file *file, void *v) {
-    unsigned long current_frequency;
-    unsigned int cpu;
-    struct cpuinfo_x86 *cpu_information;
+    unsigned long          current_frequency;
+    unsigned int           cpu;
+    struct cpuinfo_x86    *cpu_information;
     struct cpufreq_policy *cpu_frequency_policy;
-    
+
     cpu = get_cpu();
 
     cpu_frequency_policy = cpufreq_cpu_get(cpu);
