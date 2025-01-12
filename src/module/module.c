@@ -1,4 +1,3 @@
-#include <linux/kernel.h>
 #include <linux/module.h>   // for modules
 #include <linux/printk.h>   // pr_*
 #include <linux/proc_fs.h>  // procfs
@@ -7,24 +6,9 @@
 #include <asm/processor.h>  // cpu_data(), struct cpuinfo_x86
 #include <asm/cpufeature.h> // x86_cap_flags
 #include <linux/utsname.h>  // utsname()
-#include <linux/cpu.h>
-#include <linux/cpufreq.h>
+#include <linux/cpufreq.h>  // cpu frequency
 
-#if defined(__x86_64__) || defined(__aarch64__)
-    #define CPU_MODES "32-bit, 64-bit"
-#elif defined(__i386__) || defined(__arm__)
-    #define CPU_MODES "32-bit"
-#else
-    #define CPU_MODES "64-bit"
-#endif
-
-static const char *get_endianness(void) {
-    u64 n = 1;
-    if (*(u8 *)&n == 1) {
-        return "little";
-    }
-    return "big";
-}
+#include "info.h"
 
 static const char *PROCFS_FILENAME = "listik";
 static struct proc_dir_entry *procfs_file;
@@ -45,47 +29,11 @@ static void listik_seq_stop(struct seq_file *s, void *v) {
 
 }
 
-static const char *get_virtualization(void) {
-    // https://en.wikipedia.org/wiki/CPUID#EAX=1:_Processor_Info_and_Feature_Bits
-    unsigned int eax, ebx, ecx, edx;
-
-    cpuid(1, &eax, &ebx, &ecx, &edx);
-    if (ecx & (1 << 5)) {
-        return "VT-x";
-    }
-
-    cpuid(0x80000001, &eax, &ebx, &ecx, &edx);
-    if (edx & (1 << 2)) {
-        return "AMD-V";
-    }
-
-    return NULL;
-}
-
-static int listik_seq_show(struct seq_file *file, void *v) {
-    unsigned int cpu = get_cpu();
-
-    struct cpufreq_policy *cpufreq_policy = cpufreq_cpu_get(cpu);
-    if (cpufreq_policy == NULL) {
-        pr_info("Failed to get cpufreq policy, ignoring...\n");
-    }
-    unsigned long current_frequency = cpufreq_get(cpu);
-
-    struct cpuinfo_x86 *cpu_information = &cpu_data(cpu);
-    if (cpu_information == NULL) {
-        pr_err("Failed to load cpu data\n");
-        put_cpu();
-        return -1;
-    }
-
-    if (cpufreq_policy != NULL) {
-        cpufreq_cpu_put(cpufreq_policy);
-    }
-    put_cpu();
-
+static void listik_seq_show_architecture_section(
+    struct seq_file *file,
+    struct cpuinfo_x86 *cpu_information
+) {
     struct new_utsname *uts = utsname();
-
-    // Architecture
     seq_printf(
         file,
         "architecture=%s\n"
@@ -97,8 +45,11 @@ static int listik_seq_show(struct seq_file *file, void *v) {
         cpu_information->x86_phys_bits, cpu_information->x86_virt_bits,
         get_endianness()
     );
+}
 
-    // CPU(s)
+static void listik_seq_show_cpu_section(struct seq_file *file) {
+    unsigned int cpu;
+
     seq_printf(
         file,
         "cpus=%d\n"
@@ -113,8 +64,16 @@ static int listik_seq_show(struct seq_file *file, void *v) {
         );
     }
     seq_putc(file, '\n');
+}
 
-    // Vendor ID
+static void listik_seq_show_cpu_info_section(
+    struct seq_file *file,
+    struct cpuinfo_x86 *cpu_information,
+    struct cpufreq_policy *cpu_frequency_policy,
+    unsigned long current_frequency
+) {
+    size_t i;
+
     seq_printf(
         file,
         "vendor_id=%s\n"
@@ -130,9 +89,9 @@ static int listik_seq_show(struct seq_file *file, void *v) {
     );
 
 
-    if (cpufreq_policy != NULL) {
-        unsigned int max_frequency = cpufreq_policy->max;
-        unsigned int min_frequency = cpufreq_policy->min;
+    if (cpu_frequency_policy != NULL) {
+        unsigned int max_frequency = cpu_frequency_policy->max;
+        unsigned int min_frequency = cpu_frequency_policy->min;
         unsigned int scaling_percent = (current_frequency * 100) / max_frequency;
 
         seq_printf(
@@ -153,7 +112,6 @@ static int listik_seq_show(struct seq_file *file, void *v) {
     );
 
     seq_puts(file, "flags=");
-    size_t i;
     for (i = 0; i < sizeof(cpu_information->x86_capability) / sizeof(cpu_information->x86_capability[0]); i++) {
         u32 cap = cpu_information->x86_capability[i];
         if (cap) {
@@ -161,12 +119,52 @@ static int listik_seq_show(struct seq_file *file, void *v) {
         }
     }
     seq_putc(file, '\n');
+}
 
-    // Virtualization features
+static void listik_seq_show_virtualization_section(struct seq_file *file) {
     const char *virt = get_virtualization();
     if (virt != NULL) {
         seq_printf(file, "virtualization=%s\n", virt);
     }
+}
+
+static int listik_seq_show(struct seq_file *file, void *v) {
+    unsigned long current_frequency;
+    unsigned int cpu;
+    struct cpuinfo_x86 *cpu_information;
+    struct cpufreq_policy *cpu_frequency_policy;
+    
+    cpu = get_cpu();
+
+    cpu_frequency_policy = cpufreq_cpu_get(cpu);
+    if (cpu_frequency_policy == NULL) {
+        pr_info("Failed to get cpufreq policy, ignoring...\n");
+    }
+    current_frequency = cpufreq_get(cpu);
+
+    cpu_information = &cpu_data(cpu);
+    if (cpu_information == NULL) {
+        pr_err("Failed to load cpu data\n");
+        put_cpu();
+        return -1;
+    }
+
+    if (cpu_frequency_policy != NULL) {
+        cpufreq_cpu_put(cpu_frequency_policy);
+    }
+    put_cpu();
+
+    // Architecture
+    listik_seq_show_architecture_section(file, cpu_information);
+
+    // CPU(s)
+    listik_seq_show_cpu_section(file);
+
+    // Vendor ID
+    listik_seq_show_cpu_info_section(file, cpu_information, cpu_frequency_policy, current_frequency);
+
+    // Virtualization features
+    listik_seq_show_virtualization_section(file);
 
     // TODO: Caches
 

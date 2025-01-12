@@ -1,6 +1,6 @@
 MOD         = listik
 obj-m       += listik.o
-listik-objs += src/module/module.o
+listik-objs += src/module/module.o src/module/info.o
 
 PWD         := $(CURDIR)
 KERNEL_DIR  := /usr/lib/modules/$(shell uname -r)/build
