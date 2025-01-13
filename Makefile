@@ -1,4 +1,4 @@
-MOD         = listik
+MOD          = listik
 obj-m       += listik.o
 listik-objs += src/module/module.o src/module/info.o src/module/cache.o
 

@@ -1,4 +1,3 @@
-#include <asm/cpufeature.h> // x86_cap_flags
 #include <asm/processor.h>  // cpu_data(), struct cpuinfo_x86
 #include <linux/cpufreq.h>  // cpu frequency
 #include <linux/module.h>   // for modules
@@ -239,6 +238,31 @@ static void listik_seq_show_caches_section(
     _listik_seq_show_caches_section(file, cpu_information, op);
 }
 
+static void listik_seq_show_numa_section(struct seq_file *file) {
+    int                   node;
+    struct pglist_data   *node_info;
+    int                   cntr = 0;
+    const struct cpumask *cpu_mask;
+    int                   cpu;
+
+    for_each_online_node(node) {
+        cntr++;
+    }
+
+    seq_printf(file, "numa_nodes=%d\n", cntr);
+
+    for_each_online_node(node) {
+        node_info = NODE_DATA(node);
+        cpu_mask = cpumask_of_node(node);
+
+        seq_printf(file, "numa_node%d_cpus=", node);
+        for_each_cpu(cpu, cpu_mask) {
+            seq_printf(file, "%d ", cpu);
+        }
+        seq_putc(file, '\n');
+    }
+}
+
 static int listik_seq_show(struct seq_file *file, void *v) {
     unsigned long          current_frequency;
     unsigned int           cpu;
@@ -277,10 +301,11 @@ static int listik_seq_show(struct seq_file *file, void *v) {
     // Virtualization features
     listik_seq_show_virtualization_section(file);
 
-    // TODO: Caches
+    // Caches
     listik_seq_show_caches_section(file, cpu_information);
 
-    // TODO: NUMA
+    // NUMA
+    listik_seq_show_numa_section(file);
 
     // TODO: Vulnerabilities
 
