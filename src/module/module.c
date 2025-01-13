@@ -1,3 +1,4 @@
+#include <asm/cpufeature.h> // cpu_has(), X86_*
 #include <asm/processor.h>  // cpu_data(), struct cpuinfo_x86
 #include <linux/cpufreq.h>  // cpu frequency
 #include <linux/module.h>   // for modulessc
@@ -65,6 +66,17 @@ static void listik_seq_show_cpu_section(struct seq_file *file) {
     seq_putc(file, '\n');
 }
 
+static void listik_seq_show_bin_u32(struct seq_file *file, u32 n) {
+    int i;
+    for (i = 0; i < sizeof(n) * 8; i++) {
+        if (n & (1 << i)) {
+            seq_putc(file, '1');
+        } else {
+            seq_putc(file, '0');
+        }
+    }
+}
+
 static void listik_seq_show_cpu_info_section(
     struct seq_file       *file,
     struct cpuinfo_x86    *cpu_information,
@@ -109,11 +121,17 @@ static void listik_seq_show_cpu_info_section(
         cpu_information->loops_per_jiffy / (500000 / HZ), (cpu_information->loops_per_jiffy / (5000 / HZ)) % 100
     );
 
+    // Joke's over: x86_cap_flags (aka array containing string repr of each flag) is generated AND is not exported. DAMMIT
+    // https://unix.stackexchange.com/a/219674
+    // https://github.com/torvalds/linux/blob/master/arch/x86/kernel/cpu/mkcapflags.sh
+    //
+    // I'm not manually collecting all that.
     seq_puts(file, "flags=");
-    for (i = 0; i < sizeof(cpu_information->x86_capability) / sizeof(cpu_information->x86_capability[0]); i++) {
+    for (i = 0; i < NCAPINTS; i++) {
         u32 cap = cpu_information->x86_capability[i];
         if (cap) {
-            seq_printf(file, "%u ", cpu_information->x86_capability[i]);
+            listik_seq_show_bin_u32(file, cpu_information->x86_capability[i]);
+            seq_putc(file, ' ');
         }
     }
     seq_putc(file, '\n');
@@ -221,6 +239,32 @@ static void listik_seq_show_numa_section(struct seq_file *file) {
     }
 }
 
+#define show_vuln_if_present(file, c, bug, s) \
+    if (cpu_has((c), (bug))) {                \
+        seq_puts((file), #s " ");             \
+    }
+static void listik_seq_show_vulnerabilities(
+    struct seq_file    *file,
+    struct cpuinfo_x86 *c
+) {
+    seq_puts(file, "vulnerabilities=");
+    show_vuln_if_present(file, c, X86_BUG_GDS, gather_data_sampling);
+    show_vuln_if_present(file, c, X86_BUG_ITLB_MULTIHIT, itlb_multihit);
+    show_vuln_if_present(file, c, X86_BUG_L1TF, l1tf);
+    show_vuln_if_present(file, c, X86_BUG_MDS, mds);
+    show_vuln_if_present(file, c, X86_BUG_CPU_MELTDOWN, meltdown);
+    show_vuln_if_present(file, c, X86_BUG_MMIO_STALE_DATA, mmio_stale_data);
+    show_vuln_if_present(file, c, X86_BUG_RFDS, reg_file_data_sampling);
+    show_vuln_if_present(file, c, X86_BUG_RETBLEED, retbleed);
+    show_vuln_if_present(file, c, X86_BUG_SPEC_STORE_BYPASS, spec_store_bypass);
+    show_vuln_if_present(file, c, X86_BUG_SPECTRE_V1, spectre_v1);
+    show_vuln_if_present(file, c, X86_BUG_SPECTRE_V2, spectre_v2);
+    show_vuln_if_present(file, c, X86_BUG_SRBDS, srbds);
+    show_vuln_if_present(file, c, X86_BUG_TAA, tsx_async_abort);
+    seq_putc(file, '\n');
+}
+#undef show_vuln_if_present
+
 static int listik_seq_show(struct seq_file *file, void *v) {
     unsigned long          current_frequency;
     unsigned int           cpu;
@@ -266,6 +310,7 @@ static int listik_seq_show(struct seq_file *file, void *v) {
     listik_seq_show_numa_section(file);
 
     // TODO: Vulnerabilities
+    listik_seq_show_vulnerabilities(file, cpu_information);
 
     return 0;
 }
