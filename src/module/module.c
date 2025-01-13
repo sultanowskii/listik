@@ -1,6 +1,6 @@
 #include <asm/processor.h>  // cpu_data(), struct cpuinfo_x86
 #include <linux/cpufreq.h>  // cpu frequency
-#include <linux/module.h>   // for modules
+#include <linux/module.h>   // for modulessc
 #include <linux/printk.h>   // pr_*
 #include <linux/proc_fs.h>  // procfs
 #include <linux/seq_file.h> // seqfile
