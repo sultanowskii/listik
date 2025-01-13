@@ -131,93 +131,51 @@ static void _listik_seq_show_caches_section(
     struct cpuinfo_x86 *cpu_information,
     unsigned int        op
 ) {
-    u64 l1d_size = 0;
-    u16 l1d_instances = 0;
-    u64 l1i_size = 0;
-    u16 l1i_instances = 0;
-    u64 l2_size = 0;
-    u16 l2_instances = 0;
-    u64 l3_size = 0;
-    u16 l3_instances = 0;
-
     u16 cntr;
 
+    char        *cache_name_suffix;
+    u64          cache_size;
     u8           cache_level;
-    u8           cache_type;
+    u8           cache_type = CACHE_TYPE_RESERVED;
     unsigned int eax, ebx, ecx, edx;
 
-    // TODO: calculate cache instances???
     cntr = 0;
-    while (true) {
+    while (cache_type != CACHE_TYPE_NO_MORE) {
         eax = op;
         ecx = cntr;
 
-        pr_info("eax=%x ebx=%x ecx=%x edx=%x\n", eax, ebx, ecx, edx);
         __cpuid(&eax, &ebx, &ecx, &edx);
-        pr_info("eax=%x ebx=%x ecx=%x edx=%x\n", eax, ebx, ecx, edx);
 
-        cache_type = eax & 0b11111;
-        if (cache_type == 0) {
+        cache_type = get_cache_type(eax);
+        if (cache_type == CACHE_TYPE_NO_MORE) {
             break;
         }
-        cache_level = (eax >> 5) & 3;
-
-        pr_info("type=%d level=%d\n", cache_type, cache_level);
-        switch (cache_level) {
-            case 1: {
-                switch (cache_type) {
-                    case 1: {
-                        l1d_size = get_cache_size(ebx, ecx);
-                        break;
-                    }
-                    case 2: {
-                        l1i_size = get_cache_size(ebx, ecx);
-                        break;
-                    }
-                }
+        switch (cache_type) {
+            case CACHE_TYPE_DATA: {
+                cache_name_suffix = "d";
                 break;
             }
-            case 2: {
-                switch (cache_type) {
-                    case 3: {
-                        l2_size = get_cache_size(ebx, ecx);
-                        break;
-                    }
-                }
+            case CACHE_TYPE_INSTRUCTION: {
+                cache_name_suffix = "i";
                 break;
             }
-            case 3: {
-                switch (cache_type) {
-                    case 3: {
-                        l3_size = get_cache_size(ebx, ecx);
-                        break;
-                    }
-                }
+            case CACHE_TYPE_UNIFIED: {
+                cache_name_suffix = "";
                 break;
             }
         }
+        cache_size = get_cache_size(ebx, ecx);
+        cache_level = get_cache_level(eax);
+        seq_printf(
+            file,
+            "l%hhu%s_size=%llu\n",
+            cache_level,
+            cache_name_suffix,
+            cache_size
+        );
+
         cntr++;
     }
-
-    seq_printf(
-        file,
-        "l1d_size=%llu\n"
-        "l1d_instances=%hu\n"
-        "l1i_size=%llu\n"
-        "l1i_instances=%hu\n"
-        "l2_size=%llu\n"
-        "l2_instances=%hu\n"
-        "l3_size=%llu\n"
-        "l3_instances=%hu\n",
-        l1d_size,
-        l1d_instances,
-        l1i_size,
-        l1i_instances,
-        l2_size,
-        l2_instances,
-        l3_size,
-        l3_instances
-    );
 }
 
 // https://en.wikipedia.org/wiki/CPUID#EAX=4_and_EAX=8000'001Dh:_Cache_Hierarchy_and_Topology
