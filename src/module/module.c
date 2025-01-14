@@ -344,6 +344,10 @@ static int __init listik_init(void) {
         NULL,
         &proc_file_fops
     );
+    if (procfs_file == NULL) {
+        pr_alert("Failed not initialize /proc/%s\n", PROCFS_FILENAME);
+        return -ENOMEM;
+    }
 
     return 0;
 }
