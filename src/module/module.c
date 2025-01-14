@@ -36,10 +36,10 @@ static void listik_seq_show_architecture_section(
     struct new_utsname *uts = utsname();
     seq_printf(
         file,
-        "architecture=%s\n"
-        "cpu_modes=%s\n"
-        "address_sizes=%u bits physical, %u bits virtual\n"
-        "byte_order=%s\n",
+        "architecture=%s\n"                                 // Architecture
+        "cpu_modes=%s\n"                                    // Op. mode (32/64-bit address support - or both)
+        "address_sizes=%u bits physical, %u bits virtual\n" // Address sizes: max 2^39 phys addresses, 2^48 virt. ones on my machine
+        "byte_order=%s\n",                                  // Byte order (little/big)
         uts->machine,
         CPU_MODES,
         cpu_information->x86_phys_bits, cpu_information->x86_virt_bits,
@@ -52,8 +52,8 @@ static void listik_seq_show_cpu_section(struct seq_file *file) {
 
     seq_printf(
         file,
-        "cpus=%d\n"
-        "online_cpus=",
+        "cpus=%d\n"     // Online CPU count
+        "online_cpus=", // List of online CPUs
         num_online_cpus()
     );
     for_each_online_cpu(cpu) {
@@ -87,11 +87,11 @@ static void listik_seq_show_cpu_info_section(
 
     seq_printf(
         file,
-        "vendor_id=%s\n"
-        "cpu_family=%d\n"
-        "model=%d\n"
-        "model_name=%s\n"
-        "stepping=%d\n",
+        "vendor_id=%s\n"  // Vendor (GenuineIntel, AuthenticAMD, ARM, ...)
+        "cpu_family=%d\n" // CPU Family
+        "model=%d\n"      // Model number (inside a family)
+        "model_name=%s\n" // Model name
+        "stepping=%d\n",  // Model revision ("sub-version"?)
         cpu_information->x86_vendor_id,
         cpu_information->x86,
         cpu_information->x86_model,
@@ -106,27 +106,23 @@ static void listik_seq_show_cpu_info_section(
 
         seq_printf(
             file,
-            "cpus_scaling_mhz=%u\n"
-            "cpu_max_mhz=%u\n"
-            "cpu_min_mhz=%u\n",
+            "cpus_scaling_mhz=%u\n" // Current CPU usage
+            "cpu_max_mhz=%u\n"      // Max. CPU Frequency
+            "cpu_min_mhz=%u\n"      // Min. CPU frequency
+            "bogomips=%lu.%02lu\n", // 'Bogus Millions of Instructions Per Second'. Bogus ~= Fake
             scaling_percent,
             max_frequency / 1000,
-            min_frequency / 1000
+            min_frequency / 1000,
+            cpu_information->loops_per_jiffy / (500000 / HZ), (cpu_information->loops_per_jiffy / (5000 / HZ)) % 100
         );
     }
-
-    seq_printf(
-        file,
-        "bogomips=%lu.%02lu\n",
-        cpu_information->loops_per_jiffy / (500000 / HZ), (cpu_information->loops_per_jiffy / (5000 / HZ)) % 100
-    );
 
     // Joke's over: x86_cap_flags (aka array containing string repr of each flag) is generated AND is not exported. DAMMIT
     // https://unix.stackexchange.com/a/219674
     // https://github.com/torvalds/linux/blob/master/arch/x86/kernel/cpu/mkcapflags.sh
     //
     // I'm not manually collecting all that.
-    seq_puts(file, "flags=");
+    seq_puts(file, "flags="); // CPU flags aka features
     for (i = 0; i < NCAPINTS; i++) {
         u32 cap = cpu_information->x86_capability[i];
         if (cap) {
@@ -140,7 +136,8 @@ static void listik_seq_show_cpu_info_section(
 static void listik_seq_show_virtualization_section(struct seq_file *file) {
     const char *virt = get_virtualization();
     if (virt != NULL) {
-        seq_printf(file, "virtualization=%s\n", virt);
+        seq_printf(file, "virtualization=%s\n", virt); // Virtualization technology support
+        // might be multiple, but NAH
     }
 }
 
@@ -186,7 +183,7 @@ static void _listik_seq_show_caches_section(
         cache_level = get_cache_level(eax);
         seq_printf(
             file,
-            "l%hhu%s_size=%llu\n",
+            "l%hhu%s_size=%llu\n", // Specific cache size (in bytes)
             cache_level,
             cache_name_suffix,
             cache_size
@@ -225,13 +222,16 @@ static void listik_seq_show_numa_section(struct seq_file *file) {
         cntr++;
     }
 
-    seq_printf(file, "numa_nodes=%d\n", cntr);
+    seq_printf(file, "numa_nodes=%d\n", cntr); // Number of NUMA nodes
+    // NUMA - Non-Uniform Memory Access is a memory architecture.
+    // The idea is that each processor has its own local memory and it can also access any other ('remote') with higher delay.
+    // It's scalable, and quite flexible.
 
     for_each_online_node(node) {
         node_info = NODE_DATA(node);
         cpu_mask = cpumask_of_node(node);
 
-        seq_printf(file, "numa_node%d_cpus=", node);
+        seq_printf(file, "numa_node%d_cpus=", node); // List of CPUs 'owned' by specific NUMA node
         for_each_cpu(cpu, cpu_mask) {
             seq_printf(file, "%d ", cpu);
         }
@@ -247,6 +247,8 @@ static void listik_seq_show_vulnerabilities(
     struct seq_file    *file,
     struct cpuinfo_x86 *c
 ) {
+    // Known CPU vulnerabilities.
+    // lscpu also prints some tips about mitigating 'em.
     seq_puts(file, "vulnerabilities=");
     show_vuln_if_present(file, c, X86_BUG_GDS, gather_data_sampling);
     show_vuln_if_present(file, c, X86_BUG_ITLB_MULTIHIT, itlb_multihit);
@@ -277,7 +279,7 @@ static int listik_seq_show(struct seq_file *file, void *v) {
     if (cpu_frequency_policy == NULL) {
         pr_info("Failed to get cpufreq policy, ignoring\n");
     }
-    current_frequency = cpufreq_get(cpu);
+    current_frequency = cpufreq_get(cpu); // Yeah, this one doesn't work for some reason.
 
     cpu_information = &cpu_data(cpu);
     if (cpu_information == NULL) {
@@ -309,7 +311,7 @@ static int listik_seq_show(struct seq_file *file, void *v) {
     // NUMA
     listik_seq_show_numa_section(file);
 
-    // TODO: Vulnerabilities
+    // Vulnerabilities
     listik_seq_show_vulnerabilities(file, cpu_information);
 
     return 0;

@@ -6,7 +6,7 @@ listik-objs += src/module/module.o src/module/info.o src/module/cache.o
 PWD         := $(CURDIR)
 KERNEL_DIR  := /usr/lib/modules/$(shell uname -r)/build
 
-all:
+all: cli
 	make -C $(KERNEL_DIR) M=$(PWD) modules
 
 clean:

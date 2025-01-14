@@ -20,7 +20,7 @@ const char *get_virtualization(void) {
     }
 
     cpuid(0x80000001, &eax, &ebx, &ecx, &edx);
-    if (edx & (1 << 2)) {
+    if (edx & (1 << 1)) {
         return "AMD-V";
     }
 
