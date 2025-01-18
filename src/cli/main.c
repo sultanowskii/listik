@@ -11,7 +11,7 @@ int main() {
     char buffer[16];
 
     while (1) {
-        size_t fread_result = fread(buffer, sizeof(char), 16, file);
+        size_t fread_result = fread(buffer, sizeof(char), sizeof(buffer) / sizeof(buffer[0]), file);
         if (fread_result == 0) {
             if (feof(file)) {
                 break;
